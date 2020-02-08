@@ -15,8 +15,7 @@ from PIL import Image
 
 import requests
 from io import BytesIO
-from .model import cnn_captcha_break
-from .. import app
+import cnn_captcha_break  
 
 logger = logging.getLogger('general')
 exc_logger = logging.getLogger('exception')
@@ -54,6 +53,8 @@ def combine_letters(partition_point):
             else:
                 last_width = width
                 new_letters.append(letter)
+    print("new_letters")
+    print(new_letters)
     return new_letters
 
 def image_to_vector(im):
@@ -107,24 +108,27 @@ def read_data(im):
 
         # the captcha can be was split lengthwise with the partition's horizontal axis 
         partition_point = []
-
         for x in range(im_binary.size[0]):
             for y in range(im_binary.size[1]):
                 pix = im_binary.getpixel((x, y))
                 if pix != 255:
                     inletter = True
-                    #tmsdy 2020.02.08 解决最右侧粘连的bug
+                    #解决最右侧粘连的bug
                     if x == im_binary.size[0]-1 :
                         inletter = False
             if foundletter == False and inletter == True:
                 foundletter = True
                 start = x
+                print('fount start:%d'%start)
 
             if foundletter == True and inletter == False:
                 foundletter = False
                 end = x
+                print('start:%d,end:%d'%(start, end))
                 partition_point.append((start, end))
+            
             inletter = False
+        print('part count:' + str(len(partition_point)))
         if len(partition_point) > TOTAL_NUMBER:
             partition_point = combine_letters(partition_point)
 
@@ -150,42 +154,35 @@ if ckpt:
     print(ckpt.model_checkpoint_path)
     tf.train.Saver(tf.global_variables()).restore(sess, ckpt.model_checkpoint_path)
 
+  
 
-@app.route('/', methods=['POST', 'GET'])
-def get_code_from_amazon_path():
+def main():
     try:
-        # image_path = 'http://ecx.images-amazon.com/captcha/ahkfsmoa/Captcha_atbyxskbmz.jpg'
-        if request.method == 'POST':
-            json_object = request.get_json()
-            image_path = json_object['path']
-        else:
-            image_path = request.args.get('path')
-        if not image_path:
-            print('jebbe')
-            return app.send_static_file('index.html')
+        image_path = 'http://106.13.231.186/amzspider-robot/1580635186089.png'
+        image_path = 'http://106.13.231.186/amzspider-robot/1580653800520.png' #漏字母
+        image_path = 'http://106.13.231.186/amzspider-robot/1580716407143.png'#漏字母
+        
+        
         path_key = image_path[image_path.rfind('/') + 1:]
-        if image_path in code_cache:
-            return flask.jsonify({
-                'code':  code_cache[path_key]
-            })
+        #if image_path in code_cache:
+        #    return flask.jsonify({
+        #        'code':  code_cache[path_key]
+        #    })
         images_feed = read_code(image_path)
-        if not images_feed:
-            return flask.jsonify({
-                'code':  None
-            })
+        
+            
 
         y = sess.run(logits, feed_dict={images_placeholder: images_feed})
         code = "".join(vector_to_code(y))
         code_cache[path_key] = code
-        return flask.jsonify({
-            'code':  code
-        })
+           
+        print('code:' +   str(code))
+         
+        
     except Exception as err:
         logger.info(err)
-        return flask.jsonify({
-            'code':  None
-        })
+         
 
-
+main()
 
 
