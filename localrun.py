@@ -7,7 +7,8 @@ from flask import request
 
 import os.path
 import sys
-
+import time
+import cnn_captcha_break
 import tensorflow as tf
 import numpy as np
 
@@ -15,7 +16,6 @@ from PIL import Image
 
 import requests
 from io import BytesIO
-import cnn_captcha_break  
 
 logger = logging.getLogger('general')
 exc_logger = logging.getLogger('exception')
@@ -53,8 +53,8 @@ def combine_letters(partition_point):
             else:
                 last_width = width
                 new_letters.append(letter)
-    print("new_letters")
-    print(new_letters)
+    #print("new_letters")
+    #print(new_letters)
     return new_letters
 
 def image_to_vector(im):
@@ -71,6 +71,9 @@ def vector_to_code(y):
         result.append(ICON_SET[np.argmax(item)])
     return result
 
+def read_code_localfile(path):
+    with Image.open(path) as img:
+        return read_data(img)
 
 def read_code(path):
     r = requests.get(path, timeout=30)
@@ -119,16 +122,16 @@ def read_data(im):
             if foundletter == False and inletter == True:
                 foundletter = True
                 start = x
-                print('fount start:%d'%start)
+                #print('fount start:%d'%start)
 
             if foundletter == True and inletter == False:
                 foundletter = False
                 end = x
-                print('start:%d,end:%d'%(start, end))
+                #print('start:%d,end:%d'%(start, end))
                 partition_point.append((start, end))
             
             inletter = False
-        print('part count:' + str(len(partition_point)))
+        #print('part count:' + str(len(partition_point)))
         if len(partition_point) > TOTAL_NUMBER:
             partition_point = combine_letters(partition_point)
 
@@ -156,7 +159,7 @@ if ckpt:
 
   
 
-def main():
+def ocrfromurl(image_path):
     try:
         image_path = 'http://106.13.231.186/amzspider-robot/1580635186089.png'
         image_path = 'http://106.13.231.186/amzspider-robot/1580653800520.png' #漏字母
@@ -181,8 +184,31 @@ def main():
         
     except Exception as err:
         logger.info(err)
-         
 
+
+def ocrfromlocal(dirpath):
+
+
+    for file in os.listdir(dirpath):
+        try:
+            file_path = os.path.join(dirpath, file)
+            filename = os.path.split(file_path)[1]
+
+            if file_path in code_cache:
+                return print(  'code:' +   code_cache[file_path])
+            images_feed = read_code_localfile(file_path)
+
+            y = sess.run(logits, feed_dict={images_placeholder: images_feed})
+            code = "".join(vector_to_code(y))
+            code_cache[file_path] = code
+            os.rename(file_path, './codepic/'+ str(code)+'-'+str(round(time.time()))+'.png')
+
+            print('rename '+ filename + ' ' + str(code)+'.png')
+        except Exception as err:
+            print('Except:' + str(err))
+
+def main():
+    ocrfromlocal('./codepic/')
 main()
 
 
